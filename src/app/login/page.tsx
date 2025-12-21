@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { signIn } from 'next-auth/react';
-import Image from 'next/image';
-import { useState } from 'react';
+import { signIn } from "next-auth/react";
+import Image from "next/image";
+import { useState } from "react";
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     setIsLoading(true);
-    await signIn('google', { callbackUrl: '/' });
+    await signIn("google", { callbackUrl: "/" });
   };
 
   return (
@@ -17,9 +17,14 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8 rounded-2xl bg-dark-900/50 p-8 glass-card border border-dark-700 shadow-2xl">
         <div className="text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 shadow-lg glow">
-           <div className='relative size-10'>
-              <Image src="/assets/icon/logo-with-text.png" alt="Logo" className="h-10 w-auto object-contain" fill />
-           </div>
+            <div className="relative size-10">
+              <Image
+                src="/assets/icon/logo-ai.png"
+                alt="Logo"
+                className="h-10 w-auto object-contain"
+                fill
+              />
+            </div>
           </div>
           <h2 className="text-3xl font-bold tracking-tight text-white mb-2">
             Welcome Back
@@ -61,11 +66,14 @@ export default function LoginPage() {
           </button>
         </div>
       </div>
-      
+
       {/* Background decoration */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl animate-pulse-slow" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }} />
+        <div
+          className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse-slow"
+          style={{ animationDelay: "1s" }}
+        />
       </div>
     </div>
   );
