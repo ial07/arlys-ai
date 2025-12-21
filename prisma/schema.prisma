@@ -1,0 +1,206 @@
+// Prisma schema for AI Agent Builder
+// PostgreSQL database for sessions, tasks, messages, and generated files
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User for authentication and token balance
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  image         String?
+  tokens        Int      @default(100) // Initial free tokens
+  paymentStatus String   @default("none") // "none", "pending", "active"
+  role          String   @default("user") // "user" or "admin"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  sessions          Session[]
+  paymentRequests   PaymentRequest[]
+  tokenTransactions TokenTransaction[]
+}
+
+// Payment request from user (manual transfer tracking)
+model PaymentRequest {
+  id          String   @id @default(cuid())
+  userId      String
+  userEmail   String
+  package     String   // "500", "1000", "5000"
+  amount      Int      // Rupiah amount
+  status      String   @default("pending") // pending, approved, rejected
+  proofNote   String?  @db.Text // User's transfer note
+  adminNote   String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@index([status])
+  @@index([userId])
+}
+
+// Token transaction audit log
+model TokenTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Int      // +500 or -100
+  type        String   // "INITIAL", "USAGE", "TOPUP", "REFUND"
+  description String?
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+}
+
+// Agent session - represents a single goal execution
+model Session {
+  id          String   @id @default(cuid())
+  goal        String   @db.Text
+  projectName String?
+  status      String   @default("initializing") // initializing, planning, executing, reviewing, completed, failed, cancelled
+  
+  // Progress tracking
+  totalTasks     Int @default(0)
+  completedTasks Int @default(0)
+  failedTasks    Int @default(0)
+  userEmail      String?
+  userId         String?
+  
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+  
+  // Relations
+  user           User?   @relation(fields: [userId], references: [id])
+  tasks          Task[]
+  messages       Message[]
+  generatedFiles GeneratedFile[]
+  
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@index([userId])
+}
+
+// Task within a session
+model Task {
+  id          String   @id @default(cuid())
+  sessionId   String
+  epic        String
+  title       String
+  description String?  @db.Text
+  type        String   // setup, schema, api, component, page, test, config
+  status      String   @default("todo") // todo, doing, done, failed, blocked
+  priority    Int      @default(3)
+  
+  // Execution details
+  retryCount  Int      @default(0)
+  maxRetries  Int      @default(3)
+  errorLog    String[] @default([])
+  
+  // Dependencies (stored as task IDs)
+  dependencies String[] @default([])
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
+  
+  // Relations
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionId])
+  @@index([status])
+}
+
+// Chat message for UI
+model Message {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String   // user, assistant, system
+  content   String   @db.Text
+  
+  // Metadata
+  metadata  Json?    // Additional data like task info, errors, etc.
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  
+  // Relations
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+// Generated file by the agent
+model GeneratedFile {
+  id        String   @id @default(cuid())
+  sessionId String
+  path      String   // Relative path within project
+  content   String   @db.Text
+  language  String?  // typescript, javascript, json, css, etc.
+  action    String   // create, modify, delete
+  
+  // Version tracking
+  version   Int      @default(1)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@unique([sessionId, path])
+  @@index([sessionId])
+}
+
+// Pattern storage for reusable code
+model Pattern {
+  id          String   @id @default(cuid())
+  name        String
+  category    String   // auth, crud, pagination, search, validation, etc.
+  description String   @db.Text
+  code        String   @db.Text
+  language    String   @default("typescript")
+  tags        String[] @default([])
+  
+  // Usage metrics
+  usageCount  Int      @default(0)
+  successRate Float    @default(1.0)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastUsed    DateTime?
+  
+  @@index([category])
+  @@index([usageCount(sort: Desc)])
+}
+
+// Lessons learned from past sessions
+model Lesson {
+  id          String   @id @default(cuid())
+  errorType   String
+  solution    String   @db.Text
+  frequency   Int      @default(1)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  lastOccurred DateTime @default(now())
+  
+  @@unique([errorType])
+  @@index([frequency(sort: Desc)])
+}

@@ -1,0 +1,61 @@
+/**
+ * Download API - Download session files as ZIP
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import JSZip from 'jszip';
+
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id } = await params;
+
+    // Fetch all generated files for the session
+    const files = await prisma.generatedFile.findMany({
+      where: { sessionId: id },
+    });
+
+    if (files.length === 0) {
+      return NextResponse.json(
+        { error: 'No files found for this session' },
+        { status: 404 }
+      );
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { id },
+      select: { projectName: true },
+    });
+
+    const projectName = session?.projectName || 'project';
+    const zip = new JSZip();
+
+    // Add files to ZIP
+    files.forEach((file) => {
+      // Remove leading slash if present to ensure proper folder structure in zip
+      const filePath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
+      zip.file(filePath, file.content);
+    });
+
+    // Generate ZIP file
+    const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
+
+    // Return ZIP response
+    return new NextResponse(zipContent as unknown as BodyInit, {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${projectName}.zip"`,
+      },
+    });
+  } catch (error) {
+    console.error('Download error:', error);
+    return NextResponse.json(
+      { error: 'Failed to download project' },
+      { status: 500 }
+    );
+  }
+}
