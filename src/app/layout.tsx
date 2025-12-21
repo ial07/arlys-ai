@@ -1,14 +1,17 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { SessionProvider } from 'next-auth/react';
-import QueryProvider from '@/providers/query-provider';
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { SessionProvider } from "next-auth/react";
+import QueryProvider from "@/providers/query-provider";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'AI Agent Builder',
-  description: 'Build full-stack applications with AI agents',
+  title: "AI Agent Builder",
+  description: "Build full-stack applications with AI agents",
+  icons: {
+    icon: "/assets/icon/logo-ai.png",
+  },
 };
 
 export default function RootLayout({
@@ -20,9 +23,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <SessionProvider>
-          <QueryProvider>
-            {children}
-          </QueryProvider>
+          <QueryProvider>{children}</QueryProvider>
         </SessionProvider>
       </body>
     </html>

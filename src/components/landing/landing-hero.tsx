@@ -36,6 +36,13 @@ export function LandingHero() {
           <span className="font-bold text-lg tracking-tight">Arlys AI</span>
         </div>
         <div className="flex items-center gap-6 text-sm font-medium text-gray-400">
+          <a
+            href="https://ial-porto.vercel.app/"
+            target="_blank"
+            className="hover:text-white transition-colors"
+          >
+            About Me
+          </a>
           <button
             onClick={() => signIn("google")}
             className="hover:text-white transition-colors"
