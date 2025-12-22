@@ -10,10 +10,40 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
   ],
+  debug: true,
+  logger: {
+    error(code: any, ...args: any[]) {
+      console.error("NEXTAUTH ERROR", code, ...args);
+    },
+  },
   callbacks: {
     ...authConfig.callbacks,
-    async signIn(args) {
-      console.log("SIGNIN ARGS", args.user?.email);
+    async signIn({ user, account, profile }) {
+      // Upsert user on every login to ensure they exist with tokens
+      if (user.email) {
+        try {
+          // Dynamic import to prevent database connection issues from breaking auth
+          const { prisma } = await import("@/lib/prisma");
+          await prisma.user.upsert({
+            where: { email: user.email },
+            update: {
+              name: user.name,
+              image: user.image,
+            },
+            create: {
+              email: user.email,
+              name: user.name,
+              image: user.image,
+              tokens: 100, // Initial free tokens
+              role: "user",
+            },
+          });
+        } catch (error) {
+          console.error("[Auth] Database error during sign in:", error);
+          // Still allow sign in even if database fails
+          // User will be created on next successful db connection
+        }
+      }
       return true;
     },
     async session({ session, token }) {
