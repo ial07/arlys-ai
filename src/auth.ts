@@ -10,12 +10,12 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
   ],
-  debug: true,
-  logger: {
-    error(code: any, ...args: any[]) {
-      console.error("NEXTAUTH ERROR", code, ...args);
-    },
-  },
+  // debug: true,
+  // logger: {
+  //   error(code: any, ...args: any[]) {
+  //     console.error("NEXTAUTH ERROR", code, ...args);
+  //   },
+  // },
   callbacks: {
     ...authConfig.callbacks,
     async signIn({ user, account, profile }) {

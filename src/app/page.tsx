@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { AppSidebar, MobileSidebar } from "@/components/dashboard/app-sidebar";
 import { DashboardHome } from "@/components/dashboard/dashboard-home";
@@ -101,6 +101,17 @@ export default function HomePage() {
     if (!activeSessionId) return;
     window.open(`/api/sessions/${activeSessionId}/download`, "_blank");
   };
+
+  useEffect(() => {
+    if (authStatus === "authenticated") {
+      const pendingPrompt = localStorage.getItem("pendingPrompt");
+      if (pendingPrompt) {
+        localStorage.removeItem("pendingPrompt");
+        handleCreateProject(pendingPrompt);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus]);
 
   // Render Logic
   if (authStatus === "loading")

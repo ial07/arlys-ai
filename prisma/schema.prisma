@@ -77,6 +77,10 @@ model Session {
   userEmail      String?
   userId         String?
   
+  // Manifest-based generation
+  manifest      Json?    // File manifest: { files: [{ path, phase, status, required }], totalFiles, generatedFiles }
+  currentPhase  Int      @default(0) // 0=manifest, 1=foundation, 2=types, 3=database, 4=api, 5=ui, 6=validation
+  
   // Timestamps
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
