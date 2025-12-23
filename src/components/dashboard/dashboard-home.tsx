@@ -7,19 +7,21 @@ interface DashboardHomeProps {
   userEmail?: string | null;
   userName?: string | null; // e.g. "Ilham"
   onCreateProject: (prompt: string) => void;
+  isLoading?: boolean;
 }
 
 export function DashboardHome({
   userEmail,
   userName,
   onCreateProject,
+  isLoading = false,
 }: DashboardHomeProps) {
   const [prompt, setPrompt] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || isLoading) return;
     onCreateProject(prompt.trim());
   };
 
@@ -72,68 +74,46 @@ export function DashboardHome({
             onChange={(e) => setPrompt(e.target.value)}
             onFocus={() => setIsTyping(true)}
             onBlur={() => setIsTyping(false)}
-            placeholder="What do you want to build today?"
-            className="w-full bg-transparent text-lg placeholder:text-gray-600 text-gray-100 p-4 rounded-xl focus:outline-none focus:bg-white/5 transition-colors"
+            disabled={isLoading}
+            placeholder={
+              isLoading
+                ? "Creating project..."
+                : "What do you want to build today?"
+            }
+            className="w-full bg-transparent text-lg placeholder:text-gray-600 text-gray-100 p-4 rounded-xl focus:outline-none focus:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           />
 
           <div className="flex items-center justify-between px-2 pb-1 pt-2">
             <div className="flex gap-2">
-              {/* <button
-                type="button"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                Attach
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                </svg>
-                Theme
-              </button> */}
+              {/* Buttons removed for brevity */}
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 type="submit"
-                disabled={!prompt.trim()}
+                disabled={!prompt.trim() || isLoading}
                 className={`p-2 rounded-lg transition-all ${
-                  prompt.trim()
+                  prompt.trim() && !isLoading
                     ? "bg-white text-black hover:bg-gray-200 shadow-[0_0_15px_rgba(255,255,255,0.3)]"
                     : "bg-white/10 text-gray-500 cursor-not-allowed"
                 }`}
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
+                {isLoading ? (
+                  <div className="size-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>

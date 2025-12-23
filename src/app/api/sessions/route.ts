@@ -56,6 +56,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Goal is required" }, { status: 400 });
     }
 
+    // Check for active build (Resource Protection)
+    const activeSession = await prisma.session.findFirst({
+      where: {
+        userEmail: authSession.user.email,
+        status: {
+          in: ["initializing", "planning", "executing"],
+        },
+      },
+    });
+
+    if (activeSession) {
+      return NextResponse.json(
+        {
+          error:
+            "You already have an active build running. Please wait for it to complete.",
+        },
+        { status: 429 }
+      );
+    }
+
     // Check token balance
     const user = await prisma.user.findUnique({
       where: { email: authSession.user.email },

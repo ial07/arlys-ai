@@ -2,9 +2,9 @@
  * Download API - Download session files as ZIP
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import JSZip from 'jszip';
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import JSZip from "jszip";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -21,40 +21,56 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (files.length === 0) {
       return NextResponse.json(
-        { error: 'No files found for this session' },
+        { error: "No files found for this session" },
         { status: 404 }
       );
     }
 
     const session = await prisma.session.findUnique({
       where: { id },
-      select: { projectName: true },
+      select: {
+        projectName: true,
+        status: true,
+      },
     });
 
-    const projectName = session?.projectName || 'project';
+    if (!session || session.status !== "completed") {
+      return NextResponse.json(
+        { error: "Project build not completed. Download unavailable." },
+        { status: 403 }
+      );
+    }
+
+    const projectName = session.projectName || "project";
     const zip = new JSZip();
 
     // Add files to ZIP
     files.forEach((file) => {
+      // Security: Strictly exclude any node_modules or hidden files that shouldn't be there
+      if (file.path.includes("node_modules") || file.path.includes(".git"))
+        return;
+
       // Remove leading slash if present to ensure proper folder structure in zip
-      const filePath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
+      const filePath = file.path.startsWith("/")
+        ? file.path.slice(1)
+        : file.path;
       zip.file(filePath, file.content);
     });
 
     // Generate ZIP file
-    const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
+    const zipContent = await zip.generateAsync({ type: "nodebuffer" });
 
     // Return ZIP response
     return new NextResponse(zipContent as unknown as BodyInit, {
       headers: {
-        'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="${projectName}.zip"`,
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${projectName}.zip"`,
       },
     });
   } catch (error) {
-    console.error('Download error:', error);
+    console.error("Download error:", error);
     return NextResponse.json(
-      { error: 'Failed to download project' },
+      { error: "Failed to download project" },
       { status: 500 }
     );
   }

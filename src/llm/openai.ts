@@ -51,8 +51,8 @@ export async function generateCode(
 ): Promise<GenerateCodeResponse> {
   const { taskType, taskDescription, context } = request;
 
-  // Build context-aware system prompt
-  const systemPrompt = `You are an expert fullstack JavaScript/TypeScript developer specializing in Next.js 14+ applications.
+  // Build context-aware system prompt with COMPLETION CONTRACT
+  const systemPrompt = `You are an expert JavaScript developer for Next.js landing page applications.
 
 PROJECT GOAL: ${context?.goal || "Build a web application"}
 
@@ -60,45 +60,89 @@ EXISTING PROJECT FILES: ${context?.projectStructure?.length ? context.projectStr
 
 ${context?.schema ? `DATABASE SCHEMA:\n${context.schema}\n` : ""}
 
-CRITICAL RULES - FOLLOW EXACTLY:
+=== COMPLETION CONTRACT - STRICT RULES ===
 
-1. **package.json MUST be complete**:
-   - Include ALL dependencies needed (react, next, typescript, tailwindcss, etc.)
-   - Include proper scripts: "dev", "build", "start", "lint"
-   - Example dependencies to include: "next": "^14.0.0", "react": "^18.2.0", "react-dom": "^18.2.0", "typescript": "^5.0.0", "@types/react": "^18.2.0", "@types/node": "^20.0.0", "tailwindcss": "^3.4.0", "autoprefixer": "^10.4.0", "postcss": "^8.4.0"
-   - If prisma is used, include: "@prisma/client": "^5.0.0" and devDependency "prisma": "^5.0.0"
+TECH STACK (MANDATORY):
+• JavaScript ONLY (.js files, NO TypeScript, NO .ts/.tsx files)
+• Next.js 14+ App Router
+• Tailwind CSS for all styling
+• Framer Motion for ALL animations
+• TanStack Query for ALL data fetching
 
-2. **"use client" directive is REQUIRED** for components that:
-   - Use useState, useEffect, useRef, or any React hooks
-   - Have onClick, onChange, onSubmit, or any event handlers
-   - Use browser-only APIs (localStorage, window, etc.)
-   - The directive MUST be the FIRST LINE of the file: 'use client';
+ANIMATION RULES:
+• Use Framer Motion for every animation
+• NO CSS keyframes or @keyframes
+• NO CSS transitions in styled components
+• Import { motion } from 'framer-motion'
+• Wrap interactive elements with motion.div
+• Use variants for complex animations
+• Respect prefers-reduced-motion
 
-3. **app/page.tsx is the ENTRY POINT**:
-   - Always create src/app/page.tsx as the main landing page
-   - This file should import and render other components
-   - Can be a server component if no client-side interactivity
+DATA FETCHING RULES (TanStack Query v5):
+• Use TanStack Query for ALL data fetching
+• NO fetch() in component body
+• NO useEffect for data fetching
 
-4. **Import paths**:
-   - Use @/ alias for src/ imports (e.g., @/components/Button)
-   - Use relative paths only for nearby files
+CORRECT TanStack Query API (MUST follow exactly):
+\`\`\`js
+// lib/queryClient.js - Create query client
+import { QueryClient } from '@tanstack/react-query';
+export const queryClient = new QueryClient();
 
-5. **File structure for Next.js App Router**:
-   - Pages: src/app/[route]/page.tsx
-   - API Routes: src/app/api/[route]/route.ts
-   - Components: src/components/[name].tsx
-   - Libs: src/lib/[name].ts
+// providers/QueryProvider.js - Provider component
+'use client';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
+export function QueryProvider({ children }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
 
-6. **Code quality**:
-   - Complete, production-ready code (NO placeholders, NO TODOs, NO comments like "// Add your code here")
-   - Include ALL necessary imports at the top
-   - Use TypeScript with proper types
-   - Use Tailwind CSS for all styling
+// hooks/useLandingContent.js - Query hook example
+'use client';
+import { useQuery } from '@tanstack/react-query';
+export function useLandingContent() {
+  return useQuery({
+    queryKey: ['landing-content'],
+    queryFn: () => fetch('/api/cms/content').then(res => res.json()),
+  });
+}
 
-RESPONSE FORMAT (JSON only, no markdown):
+// Mutation example
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+const queryClient = useQueryClient();
+const mutation = useMutation({
+  mutationFn: (data) => fetch('/api/cms/content', { method: 'POST', body: JSON.stringify(data) }),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['landing-content'] }),
+});
+\`\`\`
+
+FORBIDDEN TanStack Query imports (DO NOT USE):
+• createQueryClient (does NOT exist)
+• createQuery (does NOT exist)
+• queryClient() as function (use new QueryClient())
+
+CMS RULES:
+• All content configurable via CMS
+• Landing sections read from CMS schema
+• SEO meta editable via admin
+• Single admin concept only
+
+COMPONENT RULES:
+• Use 'use client'; as FIRST LINE for client components
+• Components with hooks, events, or Framer Motion need 'use client'
+• Server components for static content only
+
+FILE STRUCTURE:
+• Pages: app/[route]/page.js
+• API Routes: app/api/[route]/route.js
+• Components: components/[folder]/[Name].js
+• Hooks: hooks/[useName].js
+• Lib: lib/[name].js
+
+RESPONSE FORMAT (JSON only):
 {
-  "path": "relative/path/to/file.tsx",
-  "code": "complete file content starting with imports or 'use client'",
+  "path": "relative/path/to/file.js",
+  "code": "complete file content with imports",
   "explanation": "what this file does"
 }`;
 
@@ -350,49 +394,107 @@ Generate all necessary tasks to build a complete, working application. Be specif
 /**
  * Generate a file manifest - complete list of files needed for the project
  * This is called BEFORE any code generation to define scope
+ *
+ * COMPLETION CONTRACT: Landing Page + CMS + Framer Motion + TanStack Query
  */
 export async function generateManifest(
   goal: string
 ): Promise<Array<{ path: string; description: string; required: boolean }>> {
-  const systemPrompt = `You are an expert Next.js architect. Given a project goal, generate a COMPLETE file manifest.
+  const systemPrompt = `You are a generation controller for Next.js landing page applications.
 
-The manifest must include ALL files needed for a runnable Next.js application.
+COMPLETION CONTRACT - STRICT RULES:
+• JavaScript ONLY - No TypeScript (.js files, not .ts/.tsx)
+• Next.js App Router
+• Tailwind CSS for styling
+• Framer Motion for ALL animations (no CSS keyframes)
+• TanStack Query for ALL data fetching (no useEffect for fetch)
+• CMS for content management
+• Single admin concept only
 
-REQUIRED FILES (always include):
-- package.json
-- tsconfig.json
+MANDATORY FILES (38+ minimum):
+
+GROUP 1: Config and Root
+- package.json (with next, framer-motion, @tanstack/react-query, tailwindcss)
 - next.config.js
-- tailwind.config.ts
+- tailwind.config.js
 - postcss.config.js
-- src/app/layout.tsx
-- src/app/page.tsx
-- src/app/globals.css
+- .env.example
+- README.md
 
-COMMON PATTERNS:
-- API routes: src/app/api/[resource]/route.ts
-- Components: src/components/[Name].tsx
-- Pages: src/app/[route]/page.tsx
-- Types: src/types/[name].ts
-- Lib: src/lib/[name].ts
-- Hooks: src/hooks/[name].ts
+GROUP 2: App Structure
+- app/layout.js
+- app/page.js
+- app/globals.css
+
+GROUP 3: Landing Sections (ALL required)
+- components/sections/HeroSection.js
+- components/sections/FeaturesSection.js
+- components/sections/BenefitsSection.js
+- components/sections/TestimonialsSection.js
+- components/sections/PricingSection.js
+- components/sections/CTASection.js
+- components/sections/FooterSection.js
+
+GROUP 4: UI Components
+- components/ui/Button.js
+- components/ui/Container.js
+- components/ui/SectionWrapper.js
+
+GROUP 5: Animation Components (Framer Motion only)
+- components/animations/MotionProvider.js
+- components/animations/FadeIn.js
+- components/animations/SlideUp.js
+- components/animations/Stagger.js
+
+GROUP 6: CMS Frontend
+- app/admin/page.js
+- components/cms/ContentForm.js
+- components/cms/ImageUploader.js
+
+GROUP 7: CMS Backend
+- app/api/cms/content/route.js
+- app/api/cms/seo/route.js
+
+GROUP 8: Data and Utils
+- lib/cms/schema.js
+- lib/cms/defaultContent.js
+- lib/constants.js
+- lib/seo.js
+
+GROUP 9: TanStack Query
+- lib/queryClient.js
+- lib/api/client.js
+- lib/api/cms.js
+- hooks/useLandingContent.js
+- hooks/useSeoMeta.js
+- providers/QueryProvider.js
+
+CRITICAL:
+- Generate ALL files listed above
+- Add additional files if project needs them
+- Minimum 38 files required
+- All files must be .js (JavaScript only)
 
 Return JSON:
 {
   "files": [
-    { "path": "package.json", "description": "Project dependencies", "required": true },
-    { "path": "src/app/page.tsx", "description": "Home page with hero section", "required": true },
-    ...
+    { "path": "package.json", "description": "Project dependencies with framer-motion and @tanstack/react-query", "required": true },
+    ...all other files...
   ]
-}
-
-Generate 15-40 files depending on project complexity.
-Be EXHAUSTIVE - include every file the project needs.`;
+}`;
 
   const userPrompt = `Generate a complete file manifest for:
 
 GOAL: ${goal}
 
-List EVERY file needed to build this as a complete, runnable application.`;
+REQUIREMENTS:
+- Landing page with all sections
+- CMS for content management
+- Framer Motion for all animations
+- TanStack Query for data fetching
+- JavaScript only (no TypeScript)
+
+Generate ALL mandatory files (minimum 38 files).`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -401,14 +503,23 @@ List EVERY file needed to build this as a complete, runnable application.`;
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.3,
-      max_tokens: 4000,
+      temperature: 0.2, // Lower for more consistent output
+      max_tokens: 6000,
       response_format: { type: "json_object" },
     });
 
     const content = response.choices[0]?.message?.content || '{"files": []}';
     const parsed = JSON.parse(content);
-    return parsed.files || [];
+    const files = parsed.files || [];
+
+    // Ensure minimum file count
+    if (files.length < 30) {
+      console.warn(
+        `Manifest only has ${files.length} files, contract requires 38+`
+      );
+    }
+
+    return files;
   } catch (error) {
     console.error("Failed to generate manifest:", error);
     return [];

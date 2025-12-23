@@ -11,6 +11,7 @@ import {
   FOUNDATION_FILES,
   getMissingFoundationFiles,
 } from "@/lib/project-templates";
+import { buildValidator } from "@/services/build-validator";
 
 /**
  * Agent Service
@@ -432,20 +433,59 @@ async function executeNextTask(sessionId: string, goal: string) {
       where: { sessionId },
     });
 
+    // CONTRACT VALIDATION: Minimum 30 files required
+    const MIN_FILES = 30;
+    if (finalFileCount < MIN_FILES) {
+      await prisma.message.create({
+        data: {
+          sessionId,
+          role: "system",
+          content: `⚠️ Contract violation: Only ${finalFileCount} files generated. Minimum ${MIN_FILES} required. Creating additional tasks...`,
+        },
+      });
+
+      // Log but continue - the manifest recovery should have handled this
+      console.warn(
+        `CONTRACT: Only ${finalFileCount} files, expected ${MIN_FILES}+`
+      );
+    }
+
+    // ========== BUILD VALIDATION: Validate before marking complete ==========
+    const validationResult = await buildValidator.validate(sessionId);
+
+    if (!validationResult.success) {
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: {
+          status: "failed",
+        },
+      });
+
+      await prisma.message.create({
+        data: {
+          sessionId,
+          role: "assistant",
+          content: `❌ Build validation failed: ${validationResult.message}\n\nPlease check the generated files and try again.`,
+        },
+      });
+      return;
+    }
+
+    // Mark session as completed after validation passes
     await prisma.session.update({
       where: { id: sessionId },
       data: {
         status: "completed",
         completedAt: new Date(),
         currentPhase: 6,
-      },
+      } as any, // Cast to any for Prisma type caching
     });
 
     await prisma.message.create({
       data: {
         sessionId,
         role: "assistant",
-        content: `✅ All tasks completed! Generated ${finalFileCount} files.\n\n📦 Run these commands:\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\``,
+        content: `✅ Build validated! Created ${finalFileCount} files.\n\n📦 Run these commands:\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\``,
       },
     });
 

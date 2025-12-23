@@ -7,11 +7,13 @@ import Image from "next/image";
 export function LandingHero() {
   const [prompt, setPrompt] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || isLoading) return;
 
+    setIsLoading(true);
     // Redirect to Google Login, passing the prompt as a callback param
     // We'll handle the prompt extraction in the main page after login
     // Or we can save to localStorage for simplicity/robustness
@@ -127,18 +129,35 @@ export function LandingHero() {
                 </button> */}
               </div>
 
-              <button
-                type="submit"
-                disabled={!prompt.trim()}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                  prompt.trim()
-                    ? "bg-white text-black hover:bg-gray-200"
-                    : "bg-white/10 text-gray-500 cursor-not-allowed"
-                }`}
-              >
-                <span>Generate</span>
-                <span>↵</span>
-              </button>
+              <div className="absolute right-3 bottom-3 flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={!prompt.trim() || isLoading}
+                  className={`p-2 rounded-xl transition-all duration-200 ${
+                    prompt.trim() && !isLoading
+                      ? "bg-white text-black hover:bg-gray-200 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95"
+                      : "bg-white/10 text-gray-500 cursor-not-allowed"
+                  }`}
+                >
+                  {isLoading ? (
+                    <div className="size-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="22" y1="2" x2="11" y2="13" />
+                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
           </form>
         </div>

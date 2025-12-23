@@ -18,7 +18,9 @@ export default function HomePage() {
   // Local State
   const [currentView, setCurrentView] = useState<"home" | "session">("home");
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"chat" | "files">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "files" | "preview">(
+    "chat"
+  );
   const [selectedFile, setSelectedFile] = useState<{
     id: string;
     path: string;
@@ -102,6 +104,15 @@ export default function HomePage() {
     window.open(`/api/sessions/${activeSessionId}/download`, "_blank");
   };
 
+  const handleFixError = () => {
+    if (!activeSessionId) return;
+    chatMutation.mutate({
+      sessionId: activeSessionId,
+      content: "Please fix the build errors and retry.",
+    });
+    setActiveTab("chat");
+  };
+
   useEffect(() => {
     if (authStatus === "authenticated") {
       const pendingPrompt = localStorage.getItem("pendingPrompt");
@@ -151,6 +162,7 @@ export default function HomePage() {
             userEmail={authSession?.user?.email}
             userName={authSession?.user?.name}
             onCreateProject={handleCreateProject}
+            isLoading={createProjectMutation.isPending}
           />
         ) : (
           <>
@@ -161,6 +173,10 @@ export default function HomePage() {
               activeTab={activeTab}
               onTabChange={setActiveTab}
               onDownload={handleDownload}
+              previewUrl={session?.previewUrl}
+              totalTasks={session?.totalTasks || 0}
+              completedTasks={session?.completedTasks || 0}
+              onFixError={handleFixError}
             />
 
             {activeTab === "chat" ? (
@@ -185,12 +201,28 @@ export default function HomePage() {
                   }
                 />
               </>
-            ) : (
+            ) : activeTab === "files" ? (
               <FileExplorer
                 files={session?.generatedFiles}
                 selectedFile={selectedFile}
                 onSelectFile={setSelectedFile}
               />
+            ) : (
+              // Live Preview Tab
+              <div className="flex-1 w-full bg-white relative">
+                {session?.previewUrl ? (
+                  <iframe
+                    src={session.previewUrl}
+                    className="w-full h-full border-none"
+                    title="Live Preview"
+                    sandbox="allow-scripts allow-same-origin allow-forms"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    Preview not available
+                  </div>
+                )}
+              </div>
             )}
           </>
         )}
