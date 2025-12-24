@@ -7,6 +7,7 @@ import prisma from "@/lib/prisma";
 import { generatePlan } from "@/llm/openai";
 import { auth } from "@/auth";
 import { agentService } from "@/services/agent.service";
+import { checkRateLimit, getRateLimitHeaders } from "@/lib/rate-limit";
 
 // GET /api/sessions - List all sessions
 export async function GET(request: NextRequest) {
@@ -14,6 +15,15 @@ export async function GET(request: NextRequest) {
     const session = await auth();
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limit check
+    const rateCheck = checkRateLimit(session.user.email);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait before trying again." },
+        { status: 429, headers: getRateLimitHeaders(rateCheck) }
+      );
     }
 
     const sessions = await prisma.session.findMany({
@@ -61,7 +71,7 @@ export async function POST(request: NextRequest) {
       where: {
         userEmail: authSession.user.email,
         status: {
-          in: ["initializing", "planning", "executing"],
+          in: ["initializing", "planning", "executing", "fixing"],
         },
       },
     });
@@ -76,12 +86,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check token balance
-    const user = await prisma.user.findUnique({
+    // Check token balance and ToS acceptance
+    const user = (await prisma.user.findUnique({
       where: { email: authSession.user.email },
-    });
+    })) as { id: string; tokens: number; tosAcceptedAt: Date | null } | null;
 
-    if (!user || user.tokens < 100) {
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (!user.tosAcceptedAt) {
+      return NextResponse.json(
+        {
+          error: "Terms of Service acceptance required",
+          requiresToS: true,
+        },
+        { status: 403 }
+      );
+    }
+
+    if (user.tokens < 100) {
       return NextResponse.json(
         {
           error: "Insufficient tokens",

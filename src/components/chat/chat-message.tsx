@@ -37,8 +37,12 @@ export function ChatMessage({
         )}
       </div>
       <div
-        className={`max-w-[80%] rounded-2xl px-5 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-          isUser ? "bg-[#2a2a2a] text-gray-100" : "bg-transparent text-gray-300"
+        className={`max-w-[80%] rounded-2xl px-5 py-3 text-sm leading-relaxed whitespace-pre-wrap border ${
+          isUser
+            ? "bg-[#2a2a2a] text-gray-100 border-transparent"
+            : message.role === "system"
+              ? "bg-yellow-500/10 text-yellow-200 border-yellow-500/20"
+              : "bg-transparent text-gray-300 border-transparent"
         }`}
       >
         {message.content}

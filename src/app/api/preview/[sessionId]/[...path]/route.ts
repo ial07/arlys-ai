@@ -2,10 +2,11 @@
  * Secure Preview Proxy
  *
  * Proxies requests to internal dev servers for a specific session.
- * Enforces Read-Only compliance.
+ * Enforces Read-Only compliance and token validation.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { previewService } from "@/services/preview.service";
+import prisma from "@/lib/prisma";
 
 // Disable body parsing to handle streams
 export const dynamic = "force-dynamic";
@@ -17,7 +18,25 @@ export async function GET(
   const { sessionId, path: pathSegments } = await params;
   const path = pathSegments?.join("/") || "";
 
-  // 1. Validate Session exists and has preview
+  // 1. Validate preview token
+  const token = request.nextUrl.searchParams.get("token");
+  if (!token) {
+    return new NextResponse("Unauthorized: Missing preview token", {
+      status: 401,
+    });
+  }
+
+  const session = (await prisma.session.findUnique({
+    where: { id: sessionId },
+  })) as { previewToken: string | null } | null;
+
+  if (!session || session.previewToken !== token) {
+    return new NextResponse("Unauthorized: Invalid preview token", {
+      status: 401,
+    });
+  }
+
+  // 2. Validate Session exists and has preview
   const info = previewService.getPreviewInfo(sessionId);
   if (!info) {
     return new NextResponse("Preview not active or session expired", {

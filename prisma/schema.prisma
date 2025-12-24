@@ -20,6 +20,12 @@ model User {
   tokens        Int      @default(100) // Initial free tokens
   paymentStatus String   @default("none") // "none", "pending", "active"
   role          String   @default("user") // "user" or "admin"
+  tosAcceptedAt DateTime? // Terms of service acceptance timestamp
+  
+  // Analytics
+  buildSuccessCount Int @default(0)
+  buildFailureCount Int @default(0)
+  
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -84,6 +90,7 @@ model Session {
   // Preview State
   previewUrl    String?  // Internal localhost URL or proxy path
   previewPort   Int?     // Port number allocated for this session
+  previewToken  String?  // Random token for secure preview access
   
   // Timestamps
   createdAt   DateTime  @default(now())

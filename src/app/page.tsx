@@ -9,8 +9,15 @@ import { SessionHeader } from "@/components/chat/session-header";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/chat-input";
 import { FileExplorer } from "@/components/chat/file-explorer";
-import { useSessionData, useCreateProject } from "@/hooks/use-session";
+import {
+  useSessionData,
+  useCreateProject,
+  useFixSession,
+} from "@/hooks/use-session";
 import { useChat } from "@/hooks/use-chat";
+import { useUser } from "@/hooks/use-user";
+import { TosModal } from "@/components/modals/tos-modal";
+import { AlertModal } from "@/components/modals/alert-modal";
 
 export default function HomePage() {
   const { data: authSession, status: authStatus } = useSession();
@@ -21,6 +28,15 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<"chat" | "files" | "preview">(
     "chat"
   );
+  const [alertState, setAlertState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+  });
   const [selectedFile, setSelectedFile] = useState<{
     id: string;
     path: string;
@@ -40,8 +56,12 @@ export default function HomePage() {
     useSessionData(activeSessionId);
   const createProjectMutation = useCreateProject();
   const chatMutation = useChat();
+  const { user, acceptTos, isAccepting } = useUser();
 
   const session = sessionData?.session;
+
+  // Show ToS modal if user loaded and not accepted
+  const showTosModal = !!user && !user.tosAcceptedAt;
 
   // Handlers
   const handleHomeClick = () => {
@@ -80,9 +100,25 @@ export default function HomePage() {
       setActiveSessionId(newSession.id);
       setCurrentView("session");
     } catch (error: any) {
+      // Handle known errors
+      if (error?.response?.status === 429) {
+        // Pending session or rate limit error
+        const errorMessage =
+          error?.response?.data?.error ||
+          "You already have a pending project running. Please wait.";
+
+        setAlertState({
+          isOpen: true,
+          title: "Action Blocked",
+          message: errorMessage,
+        });
+
+        // Rollback optimistic update
+        setInitialMessages((prev) => prev.filter((m) => m.id !== "user-goal"));
+        return;
+      }
+
       if (error.message === "Insufficient tokens") {
-        // Handle token error (redirect logic could go here or in hook)
-        // For now, let's just alert or let the user see the notification
         window.location.href = "/pricing";
       }
       console.error(error);
@@ -104,12 +140,11 @@ export default function HomePage() {
     window.open(`/api/sessions/${activeSessionId}/download`, "_blank");
   };
 
+  const fixMutation = useFixSession();
+
   const handleFixError = () => {
     if (!activeSessionId) return;
-    chatMutation.mutate({
-      sessionId: activeSessionId,
-      content: "Please fix the build errors and retry.",
-    });
+    fixMutation.mutate(activeSessionId);
     setActiveTab("chat");
   };
 
@@ -138,7 +173,7 @@ export default function HomePage() {
     activeSessionId && session?.messages ? session.messages : initialMessages;
 
   return (
-    <div className="flex h-screen bg-[#050505] text-white overflow-hidden font-sans">
+    <div className="flex h-screen w-full bg-[#09090b] text-white overflow-hidden">
       <MobileSidebar
         onSelectSession={handleSelectSession}
         onNewProject={handleNewProject}
@@ -154,6 +189,18 @@ export default function HomePage() {
         activeSessionId={activeSessionId}
         currentView={currentView}
         userName={authSession?.user?.name}
+      />
+
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={() => setAlertState((prev) => ({ ...prev, isOpen: false }))}
+        title={alertState.title}
+        message={alertState.message}
+      />
+      <TosModal
+        isOpen={showTosModal}
+        onAccept={() => acceptTos()}
+        isAccepting={isAccepting}
       />
 
       <div className="flex-1 flex flex-col min-w-0 bg-[#0c0c0c] sm:rounded-tl-2xl sm:border-t sm:border-l sm:border-white/5 sm:my-2 sm:mr-2 overflow-hidden relative shadow-2xl">

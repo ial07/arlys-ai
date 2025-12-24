@@ -8,6 +8,7 @@ import prisma from "@/lib/prisma";
 import { chat, analyzeIntent } from "@/llm/openai";
 import { auth } from "@/auth";
 import { agentService } from "@/services/agent.service";
+import { checkRateLimit, getRateLimitHeaders } from "@/lib/rate-limit";
 
 // POST /api/chat - Send a message
 export async function POST(request: NextRequest) {
@@ -15,6 +16,15 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limit check
+    const rateCheck = checkRateLimit(session.user.email);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait before trying again." },
+        { status: 429, headers: getRateLimitHeaders(rateCheck) }
+      );
     }
 
     const body = await request.json();

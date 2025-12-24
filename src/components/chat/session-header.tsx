@@ -49,11 +49,18 @@ export function SessionHeader({
                 ? "bg-green-500/10 text-green-400 border-green-500/20"
                 : status === "failed"
                   ? "bg-red-500/10 text-red-400 border-red-500/20"
-                  : "bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse"
+                  : status === "fixing"
+                    ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20 animate-pulse"
+                    : "bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse"
             }`}
           >
-            {status}
+            {status === "fixing" ? "SELF HEALING" : status}
           </span>
+          {status === "fixing" && (
+            <span className="text-[10px] text-yellow-500/80 animate-pulse">
+              Fixing errors...
+            </span>
+          )}
           {status === "failed" && (
             <button
               onClick={onFixError}

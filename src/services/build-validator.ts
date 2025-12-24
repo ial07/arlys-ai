@@ -255,58 +255,71 @@ import { previewService } from "./preview.service";
 /**
  * Step 5: Application Run - Basic syntax validation and START PREVIEW
  */
+/**
+ * Step 5: Application Run - Build & Runtime Validation
+ * 1. npm run build (catch compilation errors)
+ * 2. Start preview server
+ * 3. Verify runtime responsiveness
+ */
 async function step5_applicationRun(
   ctx: BuildValidationContext
 ): Promise<ValidationResult> {
-  await emitStatus(ctx.sessionId, "Starting development server");
-
-  const jsFiles = ctx.files.filter(
-    (f) =>
-      f.path.endsWith(".js") ||
-      f.path.endsWith(".jsx") ||
-      f.path.endsWith(".ts") ||
-      f.path.endsWith(".tsx")
-  );
-
+  const projectPath = path.join("/tmp", "arlys", ctx.sessionId);
   const errors: string[] = [];
 
-  for (const file of jsFiles) {
-    // Basic syntax checks
-    if (file.content.includes("import") && !file.content.includes("from")) {
-      errors.push(`${file.path}: Incomplete import statement`);
-    }
+  // 1. RUN NPM BUILD (Production Build Check)
+  await emitStatus(
+    ctx.sessionId,
+    "Running production build (npm run build)..."
+  );
+
+  try {
+    // Increase maxBuffer for large build output
+    // This catches type errors, lint errors, and import errors
+    await execAsync("npm run build", {
+      cwd: projectPath,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  } catch (buildError: any) {
+    console.error("Build failed:", buildError.message);
+    // Try to extract relevant error lines from stdout/stderr
+    const output = buildError.stdout || buildError.stderr || buildError.message;
+    errors.push(`Build Failed: ${output.slice(-2000)}`); // Last 2000 chars
+
+    return {
+      success: false,
+      step: "application",
+      message: "Build failed (compilation error)",
+      errors,
+    };
   }
 
-  // START PREVIEW SERVER
-  // In a real environment, we would need the actual file path on disk
-  // For now, we simulate success or use a temp dir if we were writing files
-  // Since files are generated in DB, we'd normally write them to /tmp/sessionId
+  // 2. START PREVIEW SERVER (Runtime Check)
+  await emitStatus(ctx.sessionId, "Starting runtime preview...");
 
-  // MOCK: For this implementation, we assume files are written or we skip actual spawn
-  // but we WILL call the service to register the intent and DB update
-
-  const projectPath = `/tmp/arlys/${ctx.sessionId}`; // Placeholder path
+  // This uses preview service which handles spawning 'npm run dev' and waiting for port
   const preview = await previewService.startPreview(ctx.sessionId, projectPath);
 
   if (!preview.success) {
-    // We don't fail the build if preview fails (optional feature), but we log it
-    // Or we fail if "Preview must never be fake" rule implies strong requirement
-    // Rule says: "Preview exists only if application truly runs"
-    // So if start fails, we can't show preview
-    await emitStatus(ctx.sessionId, `Preview failed: ${preview.message}`);
-  } else {
-    await emitStatus(
-      ctx.sessionId,
-      `Preview server running on port ${preview.url}`
-    );
+    errors.push(`Runtime Failed: ${preview.message}`);
+    return {
+      success: false,
+      step: "application",
+      message: "Runtime validation failed",
+      errors,
+    };
   }
 
+  await emitStatus(
+    ctx.sessionId,
+    `Preview server running on port ${preview.url}`
+  );
+
   return {
-    success: errors.length === 0,
+    success: true,
     step: "application",
-    message:
-      errors.length === 0 ? "Development server ready" : "Code issues detected",
-    errors,
+    message: "Application running successfully",
+    errors: [],
   };
 }
 
@@ -348,7 +361,7 @@ async function step7_finalState(
  */
 export async function validateBuild(
   sessionId: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; errors?: string[] }> {
   // Get all generated files
   const files = await prisma.generatedFile.findMany({
     where: { sessionId },
@@ -385,11 +398,11 @@ export async function validateBuild(
 
     if (!result.success) {
       await emitStatus(sessionId, `Build failed at ${result.step}`);
-      return { success: false, message: result.message };
+      return { success: false, message: result.message, errors: result.errors };
     }
   }
 
-  return { success: true, message: "Build validation passed" };
+  return { success: true, message: "Build validation passed", errors: [] };
 }
 
 export const buildValidator = {

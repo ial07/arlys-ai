@@ -5,6 +5,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import JSZip from "jszip";
+import { auth } from "@/auth";
+import { checkRateLimit, getRateLimitHeaders } from "@/lib/rate-limit";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -12,6 +14,20 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    // Auth and rate limit
+    const authSession = await auth();
+    if (!authSession?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rateCheck = checkRateLimit(authSession.user.email);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: getRateLimitHeaders(rateCheck) }
+      );
+    }
+
     const { id } = await params;
 
     // Fetch all generated files for the session

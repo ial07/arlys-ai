@@ -100,12 +100,14 @@ export const previewService = {
         timeoutId,
       });
 
-      // 5. Update DB
+      // 6. Generate secure token and update DB
+      const previewToken = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
       await prisma.session.update({
         where: { id: sessionId },
         data: {
-          previewUrl: `/api/preview/${sessionId}`, // Proxy URL
+          previewUrl: `/api/preview/${sessionId}?token=${previewToken}`,
           previewPort: port,
+          previewToken,
         } as any,
       });
 

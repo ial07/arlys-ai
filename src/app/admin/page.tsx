@@ -38,6 +38,7 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [tokenAmount, setTokenAmount] = useState("");
+  const [isCleaning, setIsCleaning] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -116,6 +117,31 @@ export default function AdminPage() {
       }
     } catch (error) {
       setMessage({ type: "error", text: "Network error" });
+    }
+  };
+
+  const handleCleanup = async () => {
+    if (
+      !confirm("Are you sure you want to delete sessions older than 30 days?")
+    )
+      return;
+
+    setIsCleaning(true);
+    try {
+      const res = await fetch("/api/admin/cleanup", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({
+          type: "success",
+          text: `Cleanup complete. Deleted: ${data.deletedCount} sessions.`,
+        });
+      } else {
+        setMessage({ type: "error", text: data.error || "Cleanup failed" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Network error" });
+    } finally {
+      setIsCleaning(false);
     }
   };
 
@@ -210,12 +236,30 @@ export default function AdminPage() {
               Manage users, tokens, and payments
             </p>
           </div>
-          <a
-            href="/"
-            className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-          >
-            ← Back to App
-          </a>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleCleanup}
+              disabled={isCleaning}
+              className={`px-4 py-2 text-sm bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 rounded-lg transition-colors flex items-center gap-2 ${
+                isCleaning ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+            >
+              {isCleaning ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                  Cleaning...
+                </>
+              ) : (
+                "Run Cleanup"
+              )}
+            </button>
+            <a
+              href="/"
+              className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              ← Back to App
+            </a>
+          </div>
         </div>
 
         {/* Message */}

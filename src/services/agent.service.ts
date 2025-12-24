@@ -329,7 +329,25 @@ async function executeNextTask(sessionId: string, goal: string) {
     // Remove duplicates
     const uniqueMissing = [...new Set(allMissing)];
 
-    if (uniqueMissing.length > 0 && manifest) {
+    // ========== MVP STRICT MODE: Skip recovery if we have core files ==========
+    const hasCoreFiles =
+      existingPaths.some(
+        (p) => p.includes("layout.js") || p.includes("layout.tsx")
+      ) &&
+      existingPaths.some(
+        (p) => p.includes("page.js") || p.includes("page.tsx")
+      );
+
+    if (hasCoreFiles) {
+      // MVP Mode: Skip recovery, proceed directly to build validation
+      await prisma.message.create({
+        data: {
+          sessionId,
+          role: "system",
+          content: `⚡ MVP Mode: Core files detected (${existingPaths.length} files). Skipping recovery, proceeding to build.`,
+        },
+      });
+    } else if (uniqueMissing.length > 0 && manifest) {
       // ========== RECOVERY: Create tasks for missing files ==========
       await prisma.message.create({
         data: {
@@ -393,12 +411,18 @@ async function executeNextTask(sessionId: string, goal: string) {
         content = FOUNDATION_FILES["tailwind.config.ts"]();
       } else if (fileName === "postcss.config.js") {
         content = FOUNDATION_FILES["postcss.config.js"]();
-      } else if (fileName === "src/app/globals.css") {
-        content = FOUNDATION_FILES["src/app/globals.css"]();
-      } else if (fileName === "src/app/layout.tsx") {
-        content = FOUNDATION_FILES["src/app/layout.tsx"](projectName);
-      } else if (fileName === "src/app/page.tsx") {
-        content = FOUNDATION_FILES["src/app/page.tsx"](projectName);
+      } else if (fileName === "app/globals.css") {
+        content = FOUNDATION_FILES["app/globals.css"]
+          ? FOUNDATION_FILES["app/globals.css"]()
+          : "";
+      } else if (fileName === "app/layout.js") {
+        content = FOUNDATION_FILES["app/layout.js"]
+          ? FOUNDATION_FILES["app/layout.js"](projectName)
+          : "";
+      } else if (fileName === "app/page.js") {
+        content = FOUNDATION_FILES["app/page.js"]
+          ? FOUNDATION_FILES["app/page.js"](projectName, goal)
+          : "";
       } else if (fileName === ".env.example") {
         content = FOUNDATION_FILES[".env.example"]();
       } else if (fileName === "README.md") {
@@ -433,25 +457,178 @@ async function executeNextTask(sessionId: string, goal: string) {
       where: { sessionId },
     });
 
-    // CONTRACT VALIDATION: Minimum 30 files required
-    const MIN_FILES = 30;
-    if (finalFileCount < MIN_FILES) {
+    // HARD CAP: Prevent runaway generation (MVP LIMIT: 40)
+    const MAX_FILES = 40;
+    if (finalFileCount >= MAX_FILES) {
       await prisma.message.create({
         data: {
           sessionId,
           role: "system",
-          content: `⚠️ Contract violation: Only ${finalFileCount} files generated. Minimum ${MIN_FILES} required. Creating additional tasks...`,
+          content: `⚠️ MVP Limit (${MAX_FILES} files) reached. Stopping generation.`,
         },
       });
+      // Skip contract validation and proceed to build validation
+    } else {
+      // MVP Mode: No minimum file requirement. If it builds, it ships.
+      const MIN_FILES = 5; // Minimal check just to ensure we have something
 
-      // Log but continue - the manifest recovery should have handled this
-      console.warn(
-        `CONTRACT: Only ${finalFileCount} files, expected ${MIN_FILES}+`
-      );
+      if (finalFileCount < MIN_FILES) {
+        await prisma.message.create({
+          data: {
+            sessionId,
+            role: "system",
+            content: `⚠️ Contract violation: Only ${finalFileCount} files generated. Minimum ${MIN_FILES} required. Creating additional tasks...`,
+          },
+        });
+
+        // Log but continue - the manifest recovery should have handled this
+        console.warn(
+          `CONTRACT: Only ${finalFileCount} files, expected ${MIN_FILES}+`
+        );
+      }
+    }
+
+    // ========== FILE CLEANUP: Remove conflicting structures ==========
+    // Delete any files in src/ folder if app/ equivalents exist
+    // Delete any .tsx/.ts files if .js equivalents exist
+    const allFiles = await prisma.generatedFile.findMany({
+      where: { sessionId },
+      select: { id: true, path: true },
+    });
+
+    const filesToDelete: string[] = [];
+    const rootPaths = allFiles
+      .filter((f) => !f.path.startsWith("src/"))
+      .map((f) => f.path);
+
+    for (const file of allFiles) {
+      // Delete src/ versions if root version exists
+      if (file.path.startsWith("src/")) {
+        const rootEquivalent = file.path.replace("src/", "");
+        if (rootPaths.includes(rootEquivalent)) {
+          filesToDelete.push(file.id);
+        }
+      }
+
+      // Delete .tsx/.ts if .js equivalent exists
+      if (file.path.endsWith(".tsx") || file.path.endsWith(".ts")) {
+        const jsEquivalent = file.path.replace(/\.tsx?$/, ".js");
+        if (rootPaths.includes(jsEquivalent)) {
+          filesToDelete.push(file.id);
+        }
+      }
+    }
+
+    if (filesToDelete.length > 0) {
+      await prisma.generatedFile.deleteMany({
+        where: { id: { in: filesToDelete } },
+      });
+
+      await prisma.message.create({
+        data: {
+          sessionId,
+          role: "system",
+          content: `🧹 Cleaned up ${filesToDelete.length} conflicting files (src/ or .tsx duplicates).`,
+        },
+      });
     }
 
     // ========== BUILD VALIDATION: Validate before marking complete ==========
-    const validationResult = await buildValidator.validate(sessionId);
+    // ========== BUILD VALIDATION WITH SELF-HEALING ==========
+    // Contract: Validate -> Fix -> Validate -> Fix -> Validate (Max 3 retries)
+
+    const MAX_BUILD_RETRIES = 3;
+    let buildRetries = 0;
+    let validationResult = await buildValidator.validate(sessionId);
+
+    while (!validationResult.success && buildRetries < MAX_BUILD_RETRIES) {
+      buildRetries++;
+
+      // Update status to 'fixing' to show UI feedback
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { status: "fixing" } as any,
+      });
+
+      await prisma.message.create({
+        data: {
+          sessionId,
+          role: "assistant",
+          content: `⚠️ Build/Runtime check failed (Attempt ${buildRetries}/${MAX_BUILD_RETRIES}):\n\n${validationResult.message}\n\nRunning self-healing mechanics...`,
+        },
+      });
+
+      try {
+        // 1. Fetch current project state
+        const projectFiles = await prisma.generatedFile.findMany({
+          where: { sessionId },
+          select: { path: true, content: true },
+        });
+
+        // 2. Ask LLM to fix the errors
+        const { fixProjectErrors } = await import("@/llm/openai");
+        const patches = await fixProjectErrors({
+          errors: validationResult.errors || [validationResult.message],
+          files: projectFiles,
+          goal,
+        });
+
+        if (patches.length === 0) {
+          await prisma.message.create({
+            data: {
+              sessionId,
+              role: "system",
+              content: `❌ Self-healing failed: No patches generated.`,
+            },
+          });
+          break; // Exit loop if AI cannot fix
+        }
+
+        // 3. Apply patches to database
+        for (const patch of patches) {
+          // Check if file exists to decide update vs create logic,
+          // generally files should exist, but patch might be new file
+          // For MVP assuming update to existing files or we catch error
+          try {
+            await prisma.generatedFile.update({
+              where: {
+                sessionId_path: {
+                  sessionId,
+                  path: patch.path,
+                },
+              },
+              data: {
+                content: patch.content,
+                version: { increment: 1 },
+                action: "modify",
+              },
+            });
+          } catch (e) {
+            // Handle new file case if needed, but usually fixes are edits
+            console.warn(
+              `Could not update file ${patch.path}, it might be missing.`
+            );
+          }
+        }
+
+        await prisma.message.create({
+          data: {
+            sessionId,
+            role: "assistant",
+            content: `✅ Applied fixes to ${patches.length} files. Retrying validation...`,
+          },
+        });
+
+        // 4. Retry Validation
+        validationResult = await buildValidator.validate(sessionId);
+      } catch (fixError) {
+        console.error("Self-healing error:", fixError);
+        break; // Stop retrying if system error
+      }
+    }
+
+    // Check final result after loop
+    // const validationResult ... (used below)
 
     if (!validationResult.success) {
       await prisma.session.update({
@@ -460,6 +637,18 @@ async function executeNextTask(sessionId: string, goal: string) {
           status: "failed",
         },
       });
+
+      // Analytics: Increment build failure count
+      const failedSessionData = await prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { userEmail: true },
+      });
+      if (failedSessionData?.userEmail) {
+        await prisma.user.update({
+          where: { email: failedSessionData.userEmail },
+          data: { buildFailureCount: { increment: 1 } } as any,
+        });
+      }
 
       await prisma.message.create({
         data: {
@@ -480,6 +669,18 @@ async function executeNextTask(sessionId: string, goal: string) {
         currentPhase: 6,
       } as any, // Cast to any for Prisma type caching
     });
+
+    // Analytics: Increment build success count
+    const sessionData = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { userEmail: true },
+    });
+    if (sessionData?.userEmail) {
+      await prisma.user.update({
+        where: { email: sessionData.userEmail },
+        data: { buildSuccessCount: { increment: 1 } } as any,
+      });
+    }
 
     await prisma.message.create({
       data: {

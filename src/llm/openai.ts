@@ -52,99 +52,52 @@ export async function generateCode(
   const { taskType, taskDescription, context } = request;
 
   // Build context-aware system prompt with COMPLETION CONTRACT
-  const systemPrompt = `You are an expert JavaScript developer for Next.js landing page applications.
+  const systemPrompt = `You are Antigravity AI under HARD EXECUTOR CONTRACT.
 
-PROJECT GOAL: ${context?.goal || "Build a web application"}
+OBJECTIVE: Generate a previewable frontend landing page.
+If preview loads, task is COMPLETED. STOP IMMEDIATELY.
 
-EXISTING PROJECT FILES: ${context?.projectStructure?.length ? context.projectStructure.join(", ") : "None yet (this is a new project)"}
+PROJECT GOAL: ${context?.goal || "Build a landing page"}
+EXISTING FILES: ${context?.projectStructure?.length ? context.projectStructure.join(", ") : "None"}
 
-${context?.schema ? `DATABASE SCHEMA:\n${context.schema}\n` : ""}
+=== HARD EXECUTOR CONTRACT ===
 
-=== COMPLETION CONTRACT - STRICT RULES ===
+🛑 TERMINAL STOP RULE:
+• If layout.js + page.js exist → STOP
+• If npm run dev succeeds → STOP
+• If preview shows content → STOP
+• Do NOT add tasks after execution starts
+• Do NOT improve, refactor, or optimize
 
-TECH STACK (MANDATORY):
-• JavaScript ONLY (.js files, NO TypeScript, NO .ts/.tsx files)
-• Next.js 14+ App Router
-• Tailwind CSS for all styling
-• Framer Motion for ALL animations
-• TanStack Query for ALL data fetching
+🚫 FORBIDDEN (NO EXCEPTIONS):
+• NO Database/Prisma
+• NO CMS
+• NO API Routes
+• NO Authentication
+• NO Payments
+• NO TypeScript (.ts/.tsx)
+• NO src/ folder
 
-ANIMATION RULES:
-• Use Framer Motion for every animation
-• NO CSS keyframes or @keyframes
-• NO CSS transitions in styled components
-• Import { motion } from 'framer-motion'
-• Wrap interactive elements with motion.div
-• Use variants for complex animations
-• Respect prefers-reduced-motion
-
-DATA FETCHING RULES (TanStack Query v5):
-• Use TanStack Query for ALL data fetching
-• NO fetch() in component body
-• NO useEffect for data fetching
-
-CORRECT TanStack Query API (MUST follow exactly):
-\`\`\`js
-// lib/queryClient.js - Create query client
-import { QueryClient } from '@tanstack/react-query';
-export const queryClient = new QueryClient();
-
-// providers/QueryProvider.js - Provider component
-'use client';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from '@/lib/queryClient';
-export function QueryProvider({ children }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-}
-
-// hooks/useLandingContent.js - Query hook example
-'use client';
-import { useQuery } from '@tanstack/react-query';
-export function useLandingContent() {
-  return useQuery({
-    queryKey: ['landing-content'],
-    queryFn: () => fetch('/api/cms/content').then(res => res.json()),
-  });
-}
-
-// Mutation example
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-const queryClient = useQueryClient();
-const mutation = useMutation({
-  mutationFn: (data) => fetch('/api/cms/content', { method: 'POST', body: JSON.stringify(data) }),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['landing-content'] }),
-});
-\`\`\`
-
-FORBIDDEN TanStack Query imports (DO NOT USE):
-• createQueryClient (does NOT exist)
-• createQuery (does NOT exist)
-• queryClient() as function (use new QueryClient())
-
-CMS RULES:
-• All content configurable via CMS
-• Landing sections read from CMS schema
-• SEO meta editable via admin
-• Single admin concept only
-
-COMPONENT RULES:
-• Use 'use client'; as FIRST LINE for client components
-• Components with hooks, events, or Framer Motion need 'use client'
-• Server components for static content only
+✅ ALLOWED:
+• Next.js 16 (App Router)
+• JavaScript (.js only)
+• Tailwind CSS
+• Framer Motion
+• Lucide React
+• Static/Dummy Data
 
 FILE STRUCTURE:
-• Pages: app/[route]/page.js
-• API Routes: app/api/[route]/route.js
-• Components: components/[folder]/[Name].js
-• Hooks: hooks/[useName].js
-• Lib: lib/[name].js
+• app/page.js
+• app/layout.js
+• components/[Name].js
 
-RESPONSE FORMAT (JSON only):
+RESPONSE FORMAT (JSON):
 {
-  "path": "relative/path/to/file.js",
-  "code": "complete file content with imports",
-  "explanation": "what this file does"
-}`;
+  "path": "app/page.js",
+  "code": "...",
+  "explanation": "..."
+}
+`;
 
   // Build user prompt with context from existing files
   let userPrompt = `Generate code for the following task:
@@ -722,3 +675,73 @@ export const llm = {
 };
 
 export default llm;
+
+/**
+ * Fix project-wide errors based on build/runtime failure log
+ */
+export async function fixProjectErrors(request: {
+  errors: string[];
+  files: Array<{ path: string; content: string }>;
+  goal: string;
+}): Promise<Array<{ path: string; content: string; explanation: string }>> {
+  const { errors, files, goal } = request;
+
+  const systemPrompt = `You are a debug expert for Next.js applications.
+Your goal is to fix build and runtime errors in a generated project.
+
+STRICT RULES:
+1. Analyze the ERROR LOG provided by the user.
+2. Review the EXISTING FILES to identify the root cause.
+3. Return a JSON object containing a list of files to patch.
+4. ONLY return files that need to be changed.
+5. Provide the COMPLETE content for each changed file (no diffs).
+
+RESPONSE FORMAT:
+{
+  "patches": [
+    {
+      "path": "path/to/file.js",
+      "content": "complete file content",
+      "explanation": "Fixed import error..."
+    }
+  ]
+}
+`;
+
+  let userPrompt = `PROJECT GOAL: ${goal}
+
+ERROR LOG:
+${errors.join("\n")}
+
+EXISTING FILES:
+`;
+
+  // Context strategy: If too many files, we might clip.
+  // For MVP, we assume moderate size or that build error points to specific files.
+  // We'll prioritize files mentioned in the error log if needed, otherwise include all provided.
+  files.forEach((f) => {
+    userPrompt += `\n--- ${f.path} ---\n${f.content}\n`;
+  });
+
+  userPrompt += `\nIdentify the root cause and generate patches to fix the build/runtime errors.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // Use powerful model for debugging
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.1,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content || "{}";
+    const parsed = JSON.parse(content);
+
+    return parsed.patches || [];
+  } catch (error) {
+    console.error("Failed to fix project errors:", error);
+    return [];
+  }
+}
