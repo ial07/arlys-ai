@@ -95,16 +95,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (!user.tosAcceptedAt) {
-      return NextResponse.json(
-        {
-          error: "Terms of Service acceptance required",
-          requiresToS: true,
-        },
-        { status: 403 }
-      );
-    }
-
     if (user.tokens < 100) {
       return NextResponse.json(
         {
