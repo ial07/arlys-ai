@@ -16,7 +16,6 @@ import {
 } from "@/hooks/use-session";
 import { useChat } from "@/hooks/use-chat";
 import { useUser } from "@/hooks/use-user";
-import { TosModal } from "@/components/modals/tos-modal";
 import { AlertModal } from "@/components/modals/alert-modal";
 
 export default function HomePage() {
@@ -56,12 +55,9 @@ export default function HomePage() {
     useSessionData(activeSessionId);
   const createProjectMutation = useCreateProject();
   const chatMutation = useChat();
-  const { user, acceptTos, isAccepting } = useUser();
+  const { user } = useUser();
 
   const session = sessionData?.session;
-
-  // Show ToS modal if user loaded and not accepted
-  const showTosModal = !!user && !user.tosAcceptedAt;
 
   // Handlers
   const handleHomeClick = () => {
@@ -196,11 +192,6 @@ export default function HomePage() {
         onClose={() => setAlertState((prev) => ({ ...prev, isOpen: false }))}
         title={alertState.title}
         message={alertState.message}
-      />
-      <TosModal
-        isOpen={showTosModal}
-        onAccept={() => acceptTos()}
-        isAccepting={isAccepting}
       />
 
       <div className="flex-1 flex flex-col min-w-0 bg-[#0c0c0c] sm:rounded-tl-2xl sm:border-t sm:border-l sm:border-white/5 sm:my-2 sm:mr-2 overflow-hidden relative shadow-2xl">
