@@ -1,0 +1,14 @@
+{
+  "name": "@arlys/worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Arlys AI Worker Executor",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "fs-extra": "^11.2.0",
+    "execa": "^9.5.2"
+  }
+}

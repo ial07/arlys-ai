@@ -1,0 +1,14 @@
+{
+  "name": "@arlys/preview",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static HTML preview template",
+  "scripts": {
+    "dev": "npx serve . -p 3001",
+    "start": "npx serve . -p 3001"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+}
